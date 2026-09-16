@@ -65,10 +65,9 @@ export default function Live() {
     if (cur > prev && featured.eliminations?.length) {
       const last = featured.eliminations[featured.eliminations.length - 1];
       const victim = byId[last.eliminated_id];
-      const killer = byId[last.eliminator_id];
-      if (victim && killer) {
+      if (victim) {
         sfx.elim();
-        setOverlay({ type: "ELIM", victim, killer });
+        setOverlay({ type: "ELIM", victim });
         setTimeout(() => setOverlay(null), 2200);
       }
     }
@@ -185,8 +184,6 @@ export default function Live() {
         <div className="fixed inset-x-0 top-1/3 z-50 pointer-events-none flex flex-col items-center animate-kop-slam">
           <div className="font-arcade text-5xl sm:text-7xl text-red-500 uppercase tracking-widest" style={{ textShadow: "0 0 40px rgba(255,46,76,1)" }}>ELIMINATED!</div>
           <div className="font-arcade text-3xl text-white uppercase mt-2">{overlay.victim.name}</div>
-          <div className="mt-2 font-display text-sm text-slate-400 uppercase tracking-widest">Eliminated by</div>
-          <div className="font-arcade text-2xl text-cyan-300 uppercase">{overlay.killer.name}</div>
         </div>
       )}
       {overlay?.type === "FIGHT" && (

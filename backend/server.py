@@ -138,7 +138,7 @@ class DrawIn(BaseModel):
 
 class EliminateIn(BaseModel):
     eliminated_id: str
-    eliminator_id: str
+    eliminator_id: Optional[str] = None  # deprecated, ignored (kept for backward compat)
 
 
 class MvpIn(BaseModel):
@@ -205,31 +205,55 @@ def compute_elapsed_ms(m) -> int:
 
 
 def compute_result(match, teams_by_id):
+    """Official KOP 3x3 rules:
+    - A team WINS only when ALL 3 opponents are eliminated.
+    - DRAW when time expires and both teams still have at least 1 alive player,
+      regardless of the elimination count.
+    - Winner points = 3 (win) + 2 (bonus for wiping 3 opponents) = 5.
+    - Loser / Draw = 0 points.
+    - PERFECT = winner + all 3 opponents eliminated + 0 own losses.
+    - elims_a = opponents eliminated by A = len(eliminated_players_b).
+    """
     ta = teams_by_id.get(match["team_a"], {"players": []})
     tb = teams_by_id.get(match["team_b"], {"players": []})
-    a_ids = set(ta.get("players", []))
-    b_ids = set(tb.get("players", []))
-    elims_a = elims_b = 0
-    eliminated_a: List[str] = []
-    eliminated_b: List[str] = []
-    for e in match.get("eliminations", []):
-        killer = e["eliminator_id"]
-        victim = e["eliminated_id"]
-        if killer in a_ids: elims_a += 1
-        elif killer in b_ids: elims_b += 1
-        if victim in a_ids: eliminated_a.append(victim)
-        elif victim in b_ids: eliminated_b.append(victim)
-    is_draw = elims_a == elims_b
-    winner_id = None
-    if not is_draw:
-        winner_id = match["team_a"] if elims_a > elims_b else match["team_b"]
-    perfect_a = winner_id == match["team_a"] and elims_a == 3 and len(eliminated_a) == 0
-    perfect_b = winner_id == match["team_b"] and elims_b == 3 and len(eliminated_b) == 0
+    a_ids = list(ta.get("players", []))
+    b_ids = list(tb.get("players", []))
+    eliminated: List[str] = [e["eliminated_id"] for e in match.get("eliminations", [])]
+    eliminated_a = [pid for pid in eliminated if pid in a_ids]
+    eliminated_b = [pid for pid in eliminated if pid in b_ids]
+    alive_a = max(0, len(a_ids) - len(eliminated_a))
+    alive_b = max(0, len(b_ids) - len(eliminated_b))
+    # Eliminations realized BY each team = opponents they took out
+    elims_by_a = len(eliminated_b)
+    elims_by_b = len(eliminated_a)
+
+    winner_id: Optional[str] = None
+    is_draw = False
+    if alive_a > 0 and alive_b == 0:
+        winner_id = match["team_a"]
+    elif alive_b > 0 and alive_a == 0:
+        winner_id = match["team_b"]
+    else:
+        # Both still alive (or both zero) → DRAW
+        is_draw = True
+
+    points_a = points_b = 0
+    perfect_a = perfect_b = False
+    if winner_id == match["team_a"]:
+        bonus = 2 if elims_by_a >= 3 else 0
+        points_a = 3 + bonus
+        perfect_a = (elims_by_a >= 3) and (len(eliminated_a) == 0)
+    elif winner_id == match["team_b"]:
+        bonus = 2 if elims_by_b >= 3 else 0
+        points_b = 3 + bonus
+        perfect_b = (elims_by_b >= 3) and (len(eliminated_b) == 0)
+
     return {
-        "elims_a": elims_a, "elims_b": elims_b,
-        "points_a": elims_a, "points_b": elims_b,
+        "elims_a": elims_by_a, "elims_b": elims_by_b,
+        "points_a": points_a, "points_b": points_b,
         "eliminated_players_a": eliminated_a,
         "eliminated_players_b": eliminated_b,
+        "alive_a": alive_a, "alive_b": alive_b,
         "winner_team_id": winner_id,
         "is_draw": is_draw,
         "perfect_a": perfect_a, "perfect_b": perfect_b,
@@ -271,6 +295,16 @@ async def startup():
         # ensure new field exists
         if "default_duration_s" not in t:
             await db.tournament.update_one({"id": "main"}, {"$set": {"default_duration_s": DEFAULT_DURATION_S}})
+
+    # One-shot recompute of already-finished matches under new scoring rules.
+    # Safe & idempotent: derives everything from `eliminations` + team rosters.
+    teams = await db.teams.find({}).to_list(50)
+    teams_by_id = {t["id"]: t for t in teams}
+    finished = await db.matches.find({"status": "ENCERRADA"}).to_list(1000)
+    for fm in finished:
+        fm = default_match_fields(fm)
+        r = compute_result(fm, teams_by_id)
+        await db.matches.update_one({"id": fm["id"]}, {"$set": r})
 
 
 @app.on_event("shutdown")
@@ -631,6 +665,8 @@ async def set_winner(mid: str, body: SetWinnerIn, _=Depends(require_admin)):
 # ---------- Eliminations ----------
 @api.post("/matches/{mid}/eliminate")
 async def add_elimination(mid: str, body: EliminateIn, _=Depends(require_admin)):
+    """Records that a player was eliminated in the match.
+    The eliminator field is intentionally not tracked (per KOP 3x3 official rules)."""
     m = await _get_match_doc(mid)
     if m.get("locked"):
         raise HTTPException(400, "Partida bloqueada")
@@ -638,30 +674,19 @@ async def add_elimination(mid: str, body: EliminateIn, _=Depends(require_admin))
         raise HTTPException(400, "A partida precisa estar em andamento")
     ta = await db.teams.find_one({"id": m["team_a"]})
     tb = await db.teams.find_one({"id": m["team_b"]})
-    a_ids = set(ta["players"]); b_ids = set(tb["players"])
-    all_ids = a_ids | b_ids
-    if body.eliminated_id == body.eliminator_id:
-        raise HTTPException(400, "Um jogador não pode se auto-eliminar")
+    all_ids = set(ta["players"]) | set(tb["players"])
     if body.eliminated_id not in all_ids:
         raise HTTPException(400, "Jogador eliminado não pertence à partida")
-    if body.eliminator_id not in all_ids:
-        raise HTTPException(400, "Jogador eliminador não pertence à partida")
-    same_a = body.eliminated_id in a_ids and body.eliminator_id in a_ids
-    same_b = body.eliminated_id in b_ids and body.eliminator_id in b_ids
-    if same_a or same_b:
-        raise HTTPException(400, "Não é permitido eliminar um companheiro de equipe")
     already_eliminated = {e["eliminated_id"] for e in m.get("eliminations", [])}
     if body.eliminated_id in already_eliminated:
         raise HTTPException(400, "Jogador já foi eliminado")
-    if body.eliminator_id in already_eliminated:
-        raise HTTPException(400, "O jogador não pode eliminar depois de ter sido eliminado")
     entry = {
         "eliminated_id": body.eliminated_id,
-        "eliminator_id": body.eliminator_id,
-        "at_ms": compute_elapsed_ms(m), "at": now_iso(),
+        "at_ms": compute_elapsed_ms(m),
+        "at": now_iso(),
     }
     await db.matches.update_one({"id": mid}, {"$push": {"eliminations": entry}})
-    # live update of aggregates (so /live is accurate mid-game)
+    # Live aggregate recompute
     m = await _get_match_doc(mid)
     teams_by_id = {ta["id"]: ta, tb["id"]: tb}
     r = compute_result(m, teams_by_id)
@@ -671,10 +696,8 @@ async def add_elimination(mid: str, body: EliminateIn, _=Depends(require_admin))
         "eliminated_players_a": r["eliminated_players_a"],
         "eliminated_players_b": r["eliminated_players_b"],
     }})
-    # Auto-end when a full 3-0 wipe happens
-    all_a_out = len(r["eliminated_players_a"]) >= len(ta["players"])
-    all_b_out = len(r["eliminated_players_b"]) >= len(tb["players"])
-    if all_a_out or all_b_out:
+    # Auto-end when a full 3-0 wipe happens (winner determined by survivors)
+    if r["alive_a"] == 0 or r["alive_b"] == 0:
         await _finalize_match_internal(mid)
     return await get_match(mid)
 
@@ -854,7 +877,7 @@ async def player_stats():
             "team_id": p.get("team_id"),
             "team_name": team_by_id.get(p.get("team_id") or "", {}).get("name"),
             "matches": 0, "team_wins": 0, "team_draws": 0, "team_losses": 0,
-            "eliminations": 0, "times_eliminated": 0, "diff": 0, "perfects": 0,
+            "times_eliminated": 0, "perfects": 0, "survivals": 0,
         }
 
     for m in matches:
@@ -862,9 +885,11 @@ async def player_stats():
         team_a = team_by_id.get(m["team_a"], {})
         team_b = team_by_id.get(m["team_b"], {})
         team_a_players = team_a.get("players", []); team_b_players = team_b.get("players", [])
+        eliminated_ids = {e["eliminated_id"] for e in m.get("eliminations", [])}
         for pid in team_a_players:
             if pid in stats:
                 stats[pid]["matches"] += 1
+                if pid not in eliminated_ids: stats[pid]["survivals"] += 1
                 if m.get("is_draw"): stats[pid]["team_draws"] += 1
                 elif m["winner_team_id"] == m["team_a"]:
                     stats[pid]["team_wins"] += 1
@@ -873,20 +898,17 @@ async def player_stats():
         for pid in team_b_players:
             if pid in stats:
                 stats[pid]["matches"] += 1
+                if pid not in eliminated_ids: stats[pid]["survivals"] += 1
                 if m.get("is_draw"): stats[pid]["team_draws"] += 1
                 elif m["winner_team_id"] == m["team_b"]:
                     stats[pid]["team_wins"] += 1
                     if m.get("perfect_b"): stats[pid]["perfects"] += 1
                 else: stats[pid]["team_losses"] += 1
         for e in m.get("eliminations", []):
-            if e["eliminator_id"] in stats:
-                stats[e["eliminator_id"]]["eliminations"] += 1
             if e["eliminated_id"] in stats:
                 stats[e["eliminated_id"]]["times_eliminated"] += 1
 
-    for s in stats.values():
-        s["diff"] = s["eliminations"] - s["times_eliminated"]
-    return sorted(stats.values(), key=lambda s: (-s["eliminations"], s["times_eliminated"]))
+    return sorted(stats.values(), key=lambda s: (-s["team_wins"], -s["perfects"], -s["survivals"], s["times_eliminated"]))
 
 
 @api.get("/stats/teams")
