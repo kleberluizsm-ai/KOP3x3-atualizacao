@@ -16,8 +16,10 @@ export default function Standings() {
               <th className="p-2 text-left">Equipe</th>
               <th className="p-2 text-right">J</th>
               <th className="p-2 text-right">V</th>
+              <th className="p-2 text-right">E</th>
               <th className="p-2 text-right">D</th>
               <th className="p-2 text-right">ELIMS</th>
+              <th className="p-2 text-right">SAL</th>
               <th className="p-2 text-right">Pts</th>
             </tr>
           </thead>
@@ -28,8 +30,10 @@ export default function Standings() {
                 <td className="p-2 font-display uppercase text-white">{r.team_name}</td>
                 <td className="p-2 text-right font-mono-num">{r.played}</td>
                 <td className="p-2 text-right font-mono-num text-green-400">{r.wins}</td>
+                <td className="p-2 text-right font-mono-num text-cyan-300">{r.draws}</td>
                 <td className="p-2 text-right font-mono-num text-red-400">{r.losses}</td>
                 <td className="p-2 text-right font-mono-num text-cyan-300">{r.elims_for}/{r.elims_against}</td>
+                <td className={`p-2 text-right font-mono-num ${r.diff > 0 ? "text-green-400" : r.diff < 0 ? "text-red-400" : "text-slate-400"}`}>{r.diff > 0 ? "+" : ""}{r.diff}</td>
                 <td className="p-2 text-right font-arcade text-yellow-400">{r.points}</td>
               </tr>
             ))}
@@ -44,6 +48,9 @@ export default function Standings() {
       <div className="mb-6">
         <div className="font-display text-cyan-300 text-xs tracking-[0.4em] uppercase">Ranking</div>
         <h1 className="font-arcade text-3xl text-red-500 uppercase">Classificação</h1>
+        <div className="text-slate-500 text-xs mt-1 font-display tracking-widest uppercase">
+          Pts = Eliminações realizadas · V = Vitória · E = Empate · D = Derrota · SAL = Saldo
+        </div>
       </div>
       <Table rows={s.A} name="A" color="text-red-400" />
       <Table rows={s.B} name="B" color="text-cyan-300" />

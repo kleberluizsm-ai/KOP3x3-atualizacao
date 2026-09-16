@@ -4,6 +4,7 @@ import { api, formatErr } from "../api";
 import { toast } from "sonner";
 import { PlayerCard } from "../components/PlayerCard";
 import { Camera, Volume2, VolumeX } from "lucide-react";
+import { sfx, isMuted, setMuted as setGlobalMute } from "../sound";
 
 const LEVELS = ["INICIANTE", "INTERMEDIÁRIO", "PROFISSIONAL"];
 
@@ -19,32 +20,7 @@ async function fileToBase64(file) {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
-// Generate arcade "confirm" sound with Web Audio API (no assets needed)
-function playArcadeSound(muted) {
-  if (muted) return;
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
-    // Two-tone bleep like arcade START
-    [
-      { f: 660, t: 0.0, d: 0.09 },
-      { f: 990, t: 0.08, d: 0.12 },
-      { f: 1320, t: 0.18, d: 0.15 },
-    ].forEach(({ f, t, d }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.setValueAtTime(f, now + t);
-      gain.gain.setValueAtTime(0.0001, now + t);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + t + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + d);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now + t);
-      osc.stop(now + t + d + 0.02);
-    });
-    setTimeout(() => ctx.close(), 800);
-  } catch (e) { /* noop */ }
-}
+// Uses shared sound library
 
 // --- STAGE 1: Arcade splash / START screen ---
 function StartScreen({ onStart, muted, setMuted }) {
@@ -101,7 +77,7 @@ function StartScreen({ onStart, muted, setMuted }) {
       {/* Sound toggle */}
       <button
         data-testid="sound-toggle"
-        onClick={() => setMuted(m => !m)}
+        onClick={() => { const n = !muted; setMuted(n); setGlobalMute(n); if (!n) sfx.select(); }}
         className="absolute top-4 right-16 sm:right-20 z-20 text-slate-400 hover:text-white p-2 border border-slate-700/60 kop-chamfer"
         aria-label="Alternar som"
       >
@@ -244,6 +220,7 @@ function RegistrationForm({ onSubmitted }) {
         name, nickname: nickname || null, level, photo,
         whatsapp: whatsapp || null, notes: notes || null,
       });
+      sfx.success();
       toast.success("Inscrição confirmada!");
       onSubmitted(r.data);
     } catch (err) {
@@ -353,7 +330,7 @@ function ConfirmedScreen({ player }) {
 // --- Root ---
 export default function Register() {
   const [stage, setStage] = useState("start"); // start | transition | form | done
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(isMuted());
   const [confirmed, setConfirmed] = useState(null);
 
   useEffect(() => {
@@ -361,7 +338,7 @@ export default function Register() {
   }, []);
 
   const handleStart = () => {
-    playArcadeSound(muted);
+    sfx.confirm();
     setStage("transition");
     setTimeout(() => setStage("form"), 900);
   };
