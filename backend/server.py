@@ -525,7 +525,7 @@ async def set_duration(mid: str, body: DurationIn, _=Depends(require_admin)):
     m = await _get_match_doc(mid)
     if m["status"] not in ("AGUARDANDO",):
         raise HTTPException(400, "Só é possível alterar a duração antes de iniciar a partida")
-    await db.matches.update_one({"id": mid}, {"$set": {"duration_seconds": max(30, int(body.duration_seconds))}})
+    await db.matches.update_one({"id": mid}, {"$set": {"duration_seconds": max(5, int(body.duration_seconds))}})
     return await get_match(mid)
 
 

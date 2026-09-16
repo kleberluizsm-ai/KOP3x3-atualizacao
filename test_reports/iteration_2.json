@@ -1,0 +1,28 @@
+{
+  "summary": "KOP 3x3 v2 backend integration testing — 22/22 pytest tests passed. Covered: reset/seed (status=OPEN, draw_done=false, default_duration_s=300), registration of 30 players (10 per level), balanced draw producing 20 GROUP matches with duration_seconds=300, match doc fields (elapsed_ms, remaining_ms=300000, started_at/paused_at null, pause_accumulated_ms=0), elimination refusal while AGUARDANDO, start/auth enforcement, full elimination validation matrix (self-elim, foreign player, same-team, valid, double-victim, dead-eliminator), points formula = elims (no bonus), auto-end on 3-0 wipe with perfect_a=true and 3/0 points, manual end 2-1, manual end 0-0 draw, pause/resume with stable remaining_ms + pause_accumulated_ms increment, timer expiry auto-end (with clamped min duration — see minor issue), duration change disallowed after start, non-perfect 3-1, draw variants 1-1 & 2-2, undo last elim, lock blocks eliminate+undo, standings has draws column and points==elims_for, playoff auto-generation of 2 SEMIs, set-winner resolving draw semis triggers FINAL+THIRD auto-creation, player & team stats populated (eliminations, times_eliminated, draws, perfects), and full admin auth enforcement matrix (401/403) across start/pause/resume/end/duration/eliminate/undo/lock/set-winner.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/matches/{id}/duration", "issue": "Server clamps duration_seconds to max(30, value). Spec/test scenario requests 3s for expiry validation; value silently becomes 30. Consider allowing lower for testing, or documenting the 30s minimum."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_tournament_v2.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "OPTIONAL: relax min duration_seconds in /matches/{id}/duration (currently max(30, x)) to enable sub-30s expiry tests, or explicitly document 30s minimum in API contract."
+  ],
+  "critical_code_review_comments": [
+    "compute_result treats winner as team with more eliminations regardless of who was eliminated — correct per spec (points=elims), but is_draw compares elims only; matches ended by timeout with unequal elims will NOT be draws (e.g., 1-0 timeout → team A wins). Confirm this is intended.",
+    "add_elimination auto-ends only when a full 3-player team is wiped. If team has 2 players (edge config), condition len(eliminated) >= len(players) still holds, but such a match could never be a 3-0 perfect. OK for current 3v3.",
+    "reset_tournament does not delete players — leftover players from prior runs would break re-registration until manually purged. Consider clearing players collection or providing explicit endpoint (tests worked around by manually DELETE-ing each player).",
+    "server.py is 940 lines — approaching the 700-line guideline; consider splitting matches/eliminations/playoffs/stats into modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_tournament_v2.py"],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only per request)"},
+  "test_credentials": "nevernub@gmail.com / KopAdmin2026!",
+  "seed_data_creation": "30 players named TEST_Player00..29 registered fresh after wiping DB; draw performed with 10 teams of 3 (BALANCED).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green on v2 rules. Full 20 group matches, 2 semis, 1 final, 1 third exist in DB. Duration endpoint clamps to 30s min — timer expiry test uses 30s wait. If retesting, run POST /api/tournament/reset then DELETE each player before re-registering (reset does not purge players collection).",
+  "rca of the issue": "n/a — no functional bugs."
+}
