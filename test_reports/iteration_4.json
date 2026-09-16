@@ -1,0 +1,26 @@
+{
+  "summary": "Backend security fixes (SEC-001 PII leak + SEC-002 open-registration hardening) fully verified. 18/18 tests pass in /app/backend/tests/test_security_fixes.py covering anonymous PII projection, admin full-record access, PATCH admin response, photo format/size validation, field-length pydantic limits, register rate limit (5/hour/IP → 6th=429), login rate limit (10/15min/(IP,email) → 11th=429), successful login on fresh IP, and end-to-end regression flow (register 30 → draw → play 20 group matches → semis generated).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_security_fixes.py",
+    "/app/test_reports/pytest/pytest_sec.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Rate limiter is in-memory per-process (dict of deques). Not shared across workers/replicas; a horizontally scaled deployment will effectively multiply the limits by worker count. For production, back it with Redis or Nginx limit_req.",
+    "public_player() correctly whitelists {id,name,nickname,level,photo,status,team_id,created_at}. Whitelist approach is safer than blacklist — verified no leakage of whatsapp/notes/password_hash/_id even if new sensitive fields are added later (they'd be dropped by default).",
+    "PlayerRegisterIn.photo min_length=1 allows technically-empty data URIs; startswith('data:image/') check catches most bad payloads but does not validate base64 body. Acceptable given max_length=700000 upper cap.",
+    "optional_current_user silently swallows all JWT errors — good for anonymous access but consider logging invalid tokens at debug level for observability.",
+    "Login rate-limit key is (IP, email.lower()) — an attacker can pivot email to bypass. Consider also a per-IP-only bucket (e.g. 50/15min) as a second layer.",
+    "_rate_check has no lock — Python asyncio is single-threaded per event loop so it's fine, but note deque mutations across `await` points would be an issue; here it is purely synchronous, safe."
+  ],
+  "updated_files": ["/app/backend/tests/test_security_fixes.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A"},
+  "test_credentials": "Admin: nevernub@gmail.com / KopAdmin2026! (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Test file self-seeds; uses TEST_ prefixed names and unique X-Forwarded-For per test to isolate rate-limit buckets. Full regression test resets tournament + wipes players then registers 30 across many IPs to avoid the 5/hour cap.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Rate-limit buckets are in-memory per backend process; if backend gets restarted between test runs buckets clear. Tests use unique X-Forwarded-For per test (uuid-based) to guarantee isolation. If running with pytest-xdist parallel workers, TestRegressionFullFlow may collide with TestRateLimits.test_register_rate_limit because both wipe/register players — running with -o addopts=\"\" (serial) is required.",
+  "rca of the issue": "N/A — all security fixes verified working. Only test-infrastructure issue encountered: xdist parallel runs caused test_full_tournament_flow to fail because TestRateLimits.test_register_rate_limit registered 5 players on a shared DB while the flow was also registering 30. Fixed by running serial via -o addopts=\"\". Test file also updated to use uuid-based IP addresses so re-runs don't hit stale rate-limit buckets."
+}
