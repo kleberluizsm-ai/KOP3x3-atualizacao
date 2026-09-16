@@ -1,0 +1,31 @@
+{
+  "summary": "KOP 3x3 v3 rules backend validated. Wrote /app/backend/tests/test_tournament_v3.py (18 tests, all PASSED). Covered: full reset, 30-player registration, draw (20 group matches, 300s), eliminate validations (pre-start 400, not-in-match 400, double-elim 400, backwards-compat eliminator_id ignored), Rule A wipe-only win (5 pts + perfect_a when 0 own losses), Rule B timeout draw (both alive → is_draw regardless of elim count, 0/0 points), manual /end mid-match → draw, 3-1 win (5 pts, perfect=False), auto-end inside eliminate call on 3rd wipe, auth enforcement on 9 admin endpoints (all 401 unauth), standings.draws column + points multiples of 5, player_stats shape (matches/team_wins/team_draws/team_losses/times_eliminated/perfects/survivals, no 'eliminations'), sort order verified, playoffs flow (SEMI draw → set-winner → FINAL+THIRD auto-created), and startup recompute idempotence check on ENCERRADA matches.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_tournament_v3.py",
+    "/app/test_reports/pytest/pytest_v3.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py compute_result correctly implements Rule A (wipe = 3+2=5) and Rule B (both alive → draw). Points are only awarded to winners; draws & losers = 0 as specified.",
+    "add_elimination() no longer validates eliminator; entry stored only carries eliminated_id/at_ms/at. Backwards-compat: unknown extra fields in EliminateIn are silently ignored by Pydantic (eliminator_id declared Optional, unused).",
+    "Startup recompute iterates all ENCERRADA matches and applies compute_result — idempotent and derives everything from stored eliminations + rosters. Verified via test_18.",
+    "player_stats() now credits times_eliminated only (no 'eliminations' field). Sorting key matches spec: (-team_wins, -perfects, -survivals, times_eliminated).",
+    "Minor: set_duration allows min 5s (max(5, int(body.duration_seconds))) — matches spec 'min 5s for testability'.",
+    "Minor: 'eliminated_id' unknown player check returns generic 400; message 'não pertence à partida' as spec.",
+    "Non-blocking: /matches/{mid}/set-winner does not recompute points (only sets winner_team_id + is_draw). This is intentional (manual override for playoff draws), but standings for group phase still relies on compute_result-derived points — verified correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_tournament_v3.py"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "N/A"},
+  "test_credentials": "Admin nevernub@gmail.com / KopAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "30 TEST_ prefixed players created by the test suite via /api/players/register (INICIANTE/INTERMEDIÁRIO/PROFISSIONAL x10 each). Tournament reset first. Left in-place after run so retest can start from clean reset.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_tournament_v3.py is the current authoritative regression suite for v3 rules. Old test_tournament_v2.py contains stale v2 assertions (e.g. 3 elims = 3 pts, eliminations field on player stats, self/team-elim 400s, eliminator validation) and will FAIL — delete or archive it. Tests are ordered and share state; run the whole file, not individual tests."
+}

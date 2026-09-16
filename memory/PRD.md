@@ -2,80 +2,62 @@
 
 ## Original Problem Statement
 Aplicativo web/mobile responsivo para organização de campeonato de paintball 3v3
-com forte estética arcade fighting game (KOF). Nomes reais dos jogadores + fotos,
-NÃO transformar em personagens. Nomes de equipes vindos do universo KOF.
+com forte estética arcade fighting game (KOF). Nomes reais dos jogadores + fotos.
+Nomes de equipes do universo KOF.
 
 ## Architecture
-- Backend: FastAPI + MongoDB (Motor). JWT auth (HS256, PyJWT). bcrypt.
-- Frontend: React 19 + Tailwind + shadcn primitives, react-router-dom v7, sonner toasts.
-- Photos: base64 stored in MongoDB (compressed client-side to 800px JPEG @ .82).
-- Sound: shared Web Audio library (no assets), global mute + volume in localStorage.
-- All routes /api-prefixed. Auth via Bearer token in localStorage.
+- Backend: FastAPI + MongoDB (Motor), JWT (HS256, PyJWT), bcrypt.
+- Frontend: React 19 + Tailwind + shadcn primitives, react-router-dom v7, sonner.
+- Photos: base64 stored in MongoDB (client-side compressed 800px JPEG @ .82).
+- Sound: shared Web Audio library (no assets), global mute + volume em localStorage.
+- All routes /api-prefixed. Auth via Bearer token em localStorage.
 
 ## Personas
-- **Jogador** (público): inscreve-se, vê equipe, tabela, resultados, classificação, stats.
-- **Organizador/Admin** (autenticado, nevernub@gmail.com): CRUD jogadores, renomeia
-  equipes, sorteia, controla o timer da partida, registra eliminações individuais,
-  bloqueia partidas, define MVP, reseta.
+- **Jogador** (público): inscreve-se, vê equipe, tabela, resultados, stats.
+- **Organizador/Admin** (nevernub@gmail.com): CRUD, sorteio, cronômetro,
+  registro de eliminações, bloqueio, MVP, set-winner (playoffs), reset.
 
-## Core Rules (v2 — Feb 2026)
-- 10 equipes × 3 jogadores. Grupos A/B com 5 cada.
-- Round-robin em cada grupo: 20 partidas totais.
-- **Pontuação = número de eliminações realizadas.** Sem bônus de vitória.
-- Empate permitido na fase de grupos (0-0, 1-1, 2-2). Playoff resolvido via `set-winner`.
-- Top-2 de cada grupo avança. Semi 1: A1×B2, Semi 2: B1×A2. Final + Disputa 3º.
-- **PERFECT**: vencedor com 3 eliminações E 0 jogadores perdidos.
-- **Cronômetro oficial**: 5 min padrão (configurável por partida, mín. 5s).
+## Official Rules (v3 — Feb 2026)
+- 10 equipes × 3 jogadores. Grupos A/B (5 cada). 20 partidas round-robin.
+- **Vitória** só acontece quando os **3 adversários são eliminados** (wipe total).
+- **Empate** quando o cronômetro chega a 00:00 e ainda há jogador vivo nos DOIS lados
+  — independentemente da contagem de eliminações.
+- **Pontuação**:
+  - Vencedor = 3 (vitória) + 2 (bônus por eliminar os 3 adversários) = **5 pts**
+  - Perdedor = 0 pts. Empate = 0 pts para ambos.
+- **PERFECT**: vencedor com 3 eliminações + 0 perdidos (visual/stat, sem pts extras).
+- Cronômetro oficial: 5 min padrão (mín. 5s), START/PAUSE/RESUME/END, auto-end.
+- **Registro simplificado**: apenas `eliminated_id`. Killer não é rastreado.
 
-## Implemented
-### v1 (First Finish)
-- Auth JWT admin seed idempotente.
-- Registro público de jogadores com upload de foto.
-- CRUD admin de jogadores + renomear equipe + grupos.
-- Sorteio NORMAL/BALANCED com anti-consecutivos, gera 20 confrontos.
-- Auto-criação de semifinais, final e 3º lugar.
-- Podium campeão + MVP manual.
-- Tela VS cinematográfica e Modo Telão com auto-refresh.
-- Bloqueio de partida; Reset completo do torneio.
+## Implemented Versions
+### v1 — MVP completo (inscrição, sorteio, grupos, playoffs, podium, telão).
+### v1.5 — Tela arcade PRESS START pública em /register.
+### v2 — Motor de partida (timer, eliminações individuais, empates, PERFECT overlay, biblioteca de som).
+### v3 — Regras oficiais (atual)
+- Vitória só por wipe total (compute_result Rule A).
+- Empate por tempo com jogadores vivos (Rule B), independente de elim count.
+- Pontuação 3+2=5 (vencedor) / 0 (perdedor/empate).
+- Campo "eliminado por" removido da UI + backend.
+- Stats individuais: matches, V/E/D, times_eliminated, perfects, survivals
+  (ranking por team_wins → perfects → survivals → -times_eliminated).
+- Migração idempotente de matches ENCERRADA no startup para reprocessar
+  usando as novas regras.
+- MatchDetail e Live com overlay ELIMINATED! (só vítima) e DRAW/WINNER/PERFECT.
 
-### v1.5 — Tela de abertura arcade (`/register`)
-- Splash cinematográfico com PRESS START, partículas, scanlines, brackets.
-- Web Audio confirmação + transição READY? + formulário.
-
-### v2 — Motor de partida (atual)
-- **Eliminações individuais**: `POST /matches/{id}/eliminate {eliminated_id, eliminator_id}`
-  com validação (auto-elim, friendly-fire, vítima repetida, killer-morto).
-- **Pontuação = eliminações**; empates auto-detectados; PERFECT auto.
-- **Cronômetro oficial**: `POST /matches/{id}/start | pause | resume | end`,
-  cálculo de elapsed_ms/remaining_ms server-side, `pause_accumulated_ms`.
-- **Auto-fim**: quando timer chega a 0 (via GET) ou quando os 3 da equipe são wipeados.
-- **Undo**: `DELETE /matches/{id}/eliminate/last`.
-- **Playoff draw resolution**: `POST /matches/{id}/set-winner`.
-- **Standings** com colunas V/E/D + saldo + Pts=eliminações.
-- **Stats individuais** exatas: derivadas do log de eliminações (killer++/victim++).
-- **Live scoreboard** no MatchDetail e /live com placar por elims em tempo real.
-- **Overlays no telão**: ELIMINATED! por X, FIGHT!, WINNER, DRAW, PERFECT.
-- **Countdown 3-2-1** ao iniciar + avisos 60s/30s/10..1.
-- **Biblioteca de som** em `/app/frontend/src/sound.js`:
-  navigate, select, confirm, back, save, success, error, reveal, teamReady,
-  vs, countdown, fight, elim, timeWarn, timeUp, winner, draw, perfect, champion.
-- Toggle global de som no header (Layout).
-- Overlay PERFECT full-screen no MatchDetail com fotos dos 3 sobreviventes.
-
-## Test Results (v2)
-- Testing agent iteration 2: **22/22 backend checks PASS** (`/app/test_reports/iteration_2.json`).
-- Cobertura: reset, registro, sorteio, timer, pause/resume, expiração automática,
-  validações de eliminação, 3-0 perfect, 3-1 não-perfect, empates 0-0/1-1/2-2,
-  undo, lock, standings, auto-advance de playoffs, set-winner, stats individuais/equipe,
-  enforcement de auth em todos os endpoints admin.
+## Test Coverage
+- Iteration 1: 32/32 backend PASS.
+- Iteration 2: 22/22 backend PASS (motor de partida v2).
+- Iteration 3: **18/18 backend PASS** (regras oficiais v3).
+- Arquivo autoritativo: `/app/backend/tests/test_tournament_v3.py`.
 
 ## Backlog (P1)
+- Replay Cinemático (log de eliminações passo a passo pós-partida).
 - Impressão/export PDF dos relatórios.
-- Volume slider por categoria (Interface / Partidas / Sorteio / Telão).
-- Modularizar server.py (>900 linhas).
-- Endpoint opcional para purgar jogadores no reset.
+- QR code do link público no painel admin.
+- Volume slider por categoria de som.
+- Modularizar server.py (>1000 linhas).
 
 ## Backlog (P2)
-- Perfil individual do jogador com histórico completo de eliminações.
-- Modo réplica: replay da partida a partir do log de eliminações.
-- QR code de compartilhamento do link de inscrição.
+- Perfil individual com histórico completo.
+- Endpoint opcional para purgar jogadores no reset.
+- Modo espectador em tempo real com atalhos de teclado.
