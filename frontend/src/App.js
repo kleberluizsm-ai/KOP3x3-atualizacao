@@ -31,7 +31,7 @@ export default function App() {
         <Toaster theme="dark" position="top-center" />
         <Routes>
           <Route path="/" element={withLayout(Home)} />
-          <Route path="/register" element={withLayout(Register)} />
+          <Route path="/register" element={withLayout(Register, { hideNav: true })} />
           <Route path="/login" element={withLayout(Login)} />
           <Route path="/admin" element={withLayout(Admin)} />
           <Route path="/players" element={withLayout(Players)} />
