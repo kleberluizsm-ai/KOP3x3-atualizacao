@@ -94,6 +94,55 @@ def clean(doc):
     return doc
 
 
+# ---------- SEC-001: public projection for player docs ----------
+PUBLIC_PLAYER_FIELDS = {
+    "id", "name", "nickname", "level", "photo", "status", "team_id", "created_at",
+}
+
+def public_player(doc):
+    """Anonymous-safe view of a player document (no whatsapp / notes)."""
+    if not doc:
+        return doc
+    d = dict(doc)
+    d.pop("_id", None); d.pop("password_hash", None)
+    return {k: v for k, v in d.items() if k in PUBLIC_PLAYER_FIELDS}
+
+
+async def optional_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
+    """Same as get_current_user but returns None silently when unauthenticated / invalid."""
+    if not creds:
+        return None
+    try:
+        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+    except Exception:
+        return None
+    return await db.users.find_one({"id": payload.get("sub")})
+
+
+# ---------- SEC-002: naive in-memory rate limiter (per-process) ----------
+from collections import deque as _deque
+import time as _time
+
+_RATE_BUCKETS: dict[str, _deque] = {}
+MAX_PHOTO_B64_LEN = 700_000  # ~525KB decoded — plenty for 800px JPEG
+
+def _rate_check(key: str, limit: int, window_s: int) -> bool:
+    now = _time.time()
+    q = _RATE_BUCKETS.setdefault(key, _deque())
+    while q and q[0] < now - window_s:
+        q.popleft()
+    if len(q) >= limit:
+        return False
+    q.append(now)
+    return True
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 # ---------- Models ----------
 Level = Literal["INICIANTE", "INTERMEDIÁRIO", "PROFISSIONAL"]
 
@@ -104,22 +153,22 @@ class LoginIn(BaseModel):
 
 
 class PlayerRegisterIn(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=80)
     level: Level
-    photo: str
-    nickname: Optional[str] = None
-    whatsapp: Optional[str] = None
-    notes: Optional[str] = None
+    photo: str = Field(..., min_length=1, max_length=MAX_PHOTO_B64_LEN)
+    nickname: Optional[str] = Field(None, max_length=40)
+    whatsapp: Optional[str] = Field(None, max_length=30)
+    notes: Optional[str] = Field(None, max_length=300)
 
 
 class PlayerUpdateIn(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=80)
     level: Optional[Level] = None
-    photo: Optional[str] = None
-    nickname: Optional[str] = None
-    whatsapp: Optional[str] = None
-    notes: Optional[str] = None
-    status: Optional[str] = None
+    photo: Optional[str] = Field(None, max_length=MAX_PHOTO_B64_LEN)
+    nickname: Optional[str] = Field(None, max_length=40)
+    whatsapp: Optional[str] = Field(None, max_length=30)
+    notes: Optional[str] = Field(None, max_length=300)
+    status: Optional[str] = Field(None, max_length=30)
 
 
 class TeamRenameIn(BaseModel):
@@ -314,7 +363,11 @@ async def shutdown():
 
 # ---------- Auth ----------
 @api.post("/auth/login")
-async def login(body: LoginIn):
+async def login(body: LoginIn, request: Request):
+    ip = _client_ip(request)
+    # Hardening: 10 attempts per 15min per (IP,email) before soft-throttle
+    if not _rate_check(f"login:{ip}:{body.email.lower()}", limit=10, window_s=900):
+        raise HTTPException(429, "Muitas tentativas. Tente novamente em 15 minutos.")
     user = await db.users.find_one({"email": body.email.lower()})
     if not user or not verify_pw(body.password, user["password_hash"]):
         raise HTTPException(401, "Credenciais inválidas")
@@ -329,7 +382,13 @@ async def me(user=Depends(get_current_user)):
 
 # ---------- Players ----------
 @api.post("/players/register")
-async def register_player(body: PlayerRegisterIn):
+async def register_player(body: PlayerRegisterIn, request: Request):
+    ip = _client_ip(request)
+    # Hardening: max 5 registrations per IP per hour
+    if not _rate_check(f"register:{ip}", limit=5, window_s=3600):
+        raise HTTPException(429, "Muitas inscrições deste IP. Tente novamente mais tarde.")
+    if not body.photo.startswith("data:image/"):
+        raise HTTPException(400, "Formato de foto inválido")
     t = await db.tournament.find_one({"id": "main"})
     count = await db.players.count_documents({})
     if count >= (t.get("player_limit") or 30):
@@ -338,24 +397,30 @@ async def register_player(body: PlayerRegisterIn):
         "id": str(uuid.uuid4()), "name": body.name.strip(),
         "nickname": (body.nickname or "").strip() or None,
         "level": body.level, "photo": body.photo,
-        "whatsapp": body.whatsapp, "notes": body.notes,
+        "whatsapp": (body.whatsapp or "").strip() or None,
+        "notes": (body.notes or "").strip() or None,
         "status": "CONFIRMADO", "team_id": None, "created_at": now_iso(),
     }
     await db.players.insert_one(player)
-    return clean(player)
+    # Owner receives their own full record; anonymous list/detail are projected below.
+    return clean(dict(player))
 
 
 @api.get("/players")
-async def list_players():
+async def list_players(user=Depends(optional_current_user)):
     docs = await db.players.find({}).sort("created_at", 1).to_list(1000)
-    return [clean(d) for d in docs]
+    if user and user.get("role") == "admin":
+        return [clean(d) for d in docs]
+    return [public_player(d) for d in docs]
 
 
 @api.get("/players/{pid}")
-async def get_player(pid: str):
+async def get_player(pid: str, user=Depends(optional_current_user)):
     d = await db.players.find_one({"id": pid})
     if not d: raise HTTPException(404, "Jogador não encontrado")
-    return clean(d)
+    if user and user.get("role") == "admin":
+        return clean(d)
+    return public_player(d)
 
 
 @api.patch("/players/{pid}")
@@ -364,7 +429,9 @@ async def update_player(pid: str, body: PlayerUpdateIn, _=Depends(require_admin)
     if updates:
         r = await db.players.update_one({"id": pid}, {"$set": updates})
         if r.matched_count == 0: raise HTTPException(404, "Jogador não encontrado")
-    return await get_player(pid)
+    d = await db.players.find_one({"id": pid})
+    if not d: raise HTTPException(404, "Jogador não encontrado")
+    return clean(d)
 
 
 @api.delete("/players/{pid}")

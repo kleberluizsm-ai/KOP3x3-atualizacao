@@ -11,13 +11,161 @@ function fmtTime(ms) {
   return `${m}:${s}`;
 }
 
+/**
+ * HP Bar — Fighting Game style
+ * - Green/cyan (>=67%), yellow/orange pulsing (33%), grey shattered (0%)
+ * - "Red residual" bar drains slowly after damage
+ * - `mirror` reverses drain direction (team A drains right→left)
+ * - K.O. banner overlays when HP hits 0
+ */
+function HPBar({ alive, total, mirror = false, color = "cyan", teamName, roster = [], eliminatedIds = new Set() }) {
+  const pct = total > 0 ? (alive / total) * 100 : 0;
+  const [displayed, setDisplayed] = useState(pct);
+  const [residual, setResidual] = useState(pct);
+  const [damaging, setDamaging] = useState(false);
+  const prevPctRef = useRef(pct);
+
+  useEffect(() => {
+    const prev = prevPctRef.current;
+    if (pct < prev) {
+      // Damage taken — flash + drain
+      setDamaging(true);
+      // Current bar drops immediately to new pct
+      setDisplayed(pct);
+      // Residual bar (behind) will slowly catch up over ~0.9s
+      const start = Date.now();
+      const from = prev, to = pct;
+      const duration = 900;
+      const iv = setInterval(() => {
+        const t = Math.min(1, (Date.now() - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setResidual(from + (to - from) * eased);
+        if (t >= 1) clearInterval(iv);
+      }, 30);
+      const flashTimer = setTimeout(() => setDamaging(false), 300);
+      return () => { clearInterval(iv); clearTimeout(flashTimer); };
+    } else if (pct > prev) {
+      // Restore (e.g. admin undo)
+      setDisplayed(pct); setResidual(pct);
+    }
+    prevPctRef.current = pct;
+  }, [pct]);
+
+  const healthy = pct >= 67;
+  const critical = pct > 0 && pct <= 34;
+  const dead = pct === 0;
+
+  const fillGradient = healthy
+    ? (color === "cyan"
+        ? "linear-gradient(90deg,#22d3ee 0%,#06b6d4 50%,#00e5ff 100%)"
+        : "linear-gradient(90deg,#22c55e 0%,#16a34a 50%,#4ade80 100%)")
+    : critical
+      ? "linear-gradient(90deg,#f59e0b 0%,#ff6b00 50%,#ffcc00 100%)"
+      : "linear-gradient(90deg,#374151 0%,#1f2937 100%)";
+
+  const glow = healthy
+    ? (color === "cyan" ? "0 0 20px rgba(0,229,255,0.55), inset 0 0 8px rgba(0,229,255,0.35)" : "0 0 20px rgba(34,197,94,0.55), inset 0 0 8px rgba(34,197,94,0.35)")
+    : critical
+      ? "0 0 22px rgba(255,107,0,0.7), inset 0 0 10px rgba(255,204,0,0.4)"
+      : "0 0 4px rgba(0,0,0,0.6), inset 0 0 6px rgba(0,0,0,0.8)";
+
+  const align = mirror ? "text-right" : "text-left";
+  const flexDir = mirror ? "flex-row-reverse" : "flex-row";
+
+  return (
+    <div className="w-full relative">
+      <div className={`flex items-baseline justify-between gap-2 mb-1 ${flexDir}`}>
+        <div className={`font-arcade uppercase tracking-widest text-sm sm:text-lg ${color === "cyan" ? "text-cyan-300" : "text-red-400"} truncate max-w-[70%]`}>
+          {teamName}
+        </div>
+        <div data-testid={`hp-label-${mirror ? "a" : "b"}`}
+             className={`font-mono-num text-[10px] sm:text-xs uppercase tracking-widest ${critical ? "text-yellow-300 animate-kop-pulse" : dead ? "text-red-500" : "text-slate-400"}`}>
+          {alive}/{total} VIVOS · {Math.round(pct)}% HP
+        </div>
+      </div>
+
+      <div
+        className={`relative h-6 sm:h-8 border-2 ${dead ? "border-red-600" : critical ? "border-yellow-400" : color === "cyan" ? "border-cyan-500/70" : "border-green-500/70"} bg-black/90 overflow-hidden kop-chamfer`}
+        style={{ transform: mirror ? "scaleX(-1)" : "none" }}
+        data-testid={`hp-bar-${mirror ? "a" : "b"}`}
+      >
+        {/* Grid backdrop */}
+        <div className="absolute inset-0 kop-diag-bg opacity-30" />
+        {/* Residual (slow-drain red bar behind) */}
+        <div
+          className="absolute inset-y-0 left-0 bg-gradient-to-r from-red-500 to-red-800"
+          style={{ width: `${residual}%`, opacity: residual > displayed ? 0.85 : 0, transition: "opacity 200ms" }}
+        />
+        {/* Current HP fill */}
+        <div
+          className={`absolute inset-y-0 left-0 ${damaging ? "animate-kop-flicker" : ""}`}
+          style={{
+            width: `${displayed}%`,
+            background: fillGradient,
+            boxShadow: glow,
+            transition: "width 250ms cubic-bezier(0.34,1.56,0.64,1)",
+          }}
+        />
+        {/* Segment dividers at 33% and 66% (representing each player unit) */}
+        <div className="absolute inset-y-0 left-1/3 w-px bg-black/60" />
+        <div className="absolute inset-y-0 left-2/3 w-px bg-black/60" />
+        {/* Scanlines overlay */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: "repeating-linear-gradient(0deg,rgba(0,0,0,0.25),rgba(0,0,0,0.25) 1px,transparent 1px,transparent 3px)",
+        }} />
+        {/* Damage flash overlay */}
+        {damaging && (
+          <div className="absolute inset-0 bg-yellow-300/40 mix-blend-screen animate-kop-flicker pointer-events-none" />
+        )}
+        {/* Shatter effect when dead */}
+        {dead && (
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: "repeating-linear-gradient(35deg,rgba(255,46,76,0.15) 0 4px,transparent 4px 10px)",
+          }} />
+        )}
+      </div>
+
+      {/* Player identification below the bar */}
+      <div className={`mt-2 flex flex-wrap gap-1.5 ${mirror ? "justify-end" : "justify-start"}`}>
+        {roster.map(p => {
+          const out = eliminatedIds.has(p.id);
+          return (
+            <div key={p.id}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 border kop-chamfer text-[10px] sm:text-xs font-display uppercase tracking-widest ${
+                out
+                  ? "border-slate-800 text-slate-600 line-through"
+                  : color === "cyan" ? "border-cyan-500/50 text-cyan-200" : "border-green-500/50 text-green-200"
+              }`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${out ? "bg-slate-700" : "bg-green-400 animate-kop-pulse"}`} />
+              <span className="truncate max-w-[110px]">{p.name}</span>
+              <span className={`text-[9px] ${out ? "text-slate-700" : color === "cyan" ? "text-cyan-500" : "text-green-500"}`}>
+                {out ? "[ELIMINADO]" : "[VIVO]"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* K.O. banner */}
+      {dead && (
+        <div className={`absolute -top-3 sm:-top-4 ${mirror ? "right-0" : "left-0"} z-20 animate-kop-slam`}>
+          <div className="font-arcade text-2xl sm:text-4xl text-red-500 uppercase tracking-widest px-3 py-1 border-2 border-red-500 bg-black/90 kop-glow-red"
+               style={{ textShadow: "0 0 20px rgba(255,46,76,1)" }}>
+            K.O.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Live() {
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
   const [tick, setTick] = useState(0);
-  const [overlay, setOverlay] = useState(null); // {type, ...}
-  const lastEliminationsRef = useRef({}); // per match id -> count
+  const [overlay, setOverlay] = useState(null);
+  const lastEliminationsRef = useRef({});
   const lastStatusRef = useRef({});
   const lastCountdownRef = useRef({});
 
@@ -28,7 +176,7 @@ export default function Live() {
 
   useEffect(() => {
     load();
-    const iv = setInterval(load, 1500);
+    const iv = setInterval(load, 1200); // slightly faster for HP sync
     return () => clearInterval(iv);
   }, []);
   useEffect(() => {
@@ -38,7 +186,6 @@ export default function Live() {
 
   const byId = Object.fromEntries(players.map(p => [p.id, p]));
 
-  // Featured: prefer running match, else next upcoming, else last finished
   const featured = useMemo(() => {
     return matches.find(m => m.status === "EM_ANDAMENTO")
       || matches.find(m => m.status === "PAUSADA")
@@ -56,7 +203,6 @@ export default function Live() {
     return featured.remaining_ms ?? (featured.duration_seconds || 300) * 1000;
   }, [featured, tick]);
 
-  // Detect new eliminations to flash overlay
   useEffect(() => {
     if (!featured) return;
     const key = featured.id;
@@ -73,7 +219,6 @@ export default function Live() {
     }
     lastEliminationsRef.current[key] = cur;
 
-    // Time warnings when live
     if (featured.status === "EM_ANDAMENTO") {
       const secs = Math.ceil(remainingMs / 1000);
       const cd = lastCountdownRef.current[key] || {};
@@ -83,7 +228,6 @@ export default function Live() {
       lastCountdownRef.current[key] = cd;
     }
 
-    // Status transitions
     const prevStatus = lastStatusRef.current[key];
     if (prevStatus && prevStatus !== featured.status) {
       if (featured.status === "EM_ANDAMENTO") {
@@ -120,6 +264,8 @@ export default function Live() {
   const rosterA = (teamA?.players || []).map(pid => byId[pid]).filter(Boolean);
   const rosterB = (teamB?.players || []).map(pid => byId[pid]).filter(Boolean);
   const eliminatedIds = new Set((featured.eliminations || []).map(e => e.eliminated_id));
+  const aliveA = rosterA.filter(p => !eliminatedIds.has(p.id)).length;
+  const aliveB = rosterB.filter(p => !eliminatedIds.has(p.id)).length;
   const secs = Math.ceil(remainingMs / 1000);
   const showBigCountdown = featured.status === "EM_ANDAMENTO" && secs <= 10 && secs > 0;
 
@@ -129,38 +275,60 @@ export default function Live() {
       <div className="scanlines absolute inset-0 opacity-50" />
       <Link to="/" className="absolute top-4 left-4 z-30 text-xs font-display text-slate-600 hover:text-white uppercase tracking-widest">← EXIT</Link>
 
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
-        <div className="font-arcade text-red-500 text-sm sm:text-lg tracking-[0.5em] uppercase animate-kop-flicker">KINGS OF PAINTBALL — LIVE</div>
-        <div className="font-arcade text-2xl sm:text-4xl text-white uppercase tracking-widest mt-2">MATCH {String(featured.number).padStart(2, "0")}</div>
-        <div className="font-display text-xs sm:text-sm text-cyan-300 uppercase tracking-widest">
-          {featured.phase === "GROUP" ? `Grupo ${featured.group}` : featured.phase}
-          {" · "}
-          <span className={
-            featured.status === "EM_ANDAMENTO" ? "text-green-400" :
-            featured.status === "PAUSADA" ? "text-yellow-400" :
-            featured.status === "ENCERRADA" ? "text-slate-500" : "text-cyan-300"
-          }>{featured.status}</span>
+      <div className="relative z-10 min-h-screen flex flex-col items-center p-4 sm:p-6">
+        {/* Header */}
+        <div className="text-center">
+          <div className="font-arcade text-red-500 text-sm sm:text-lg tracking-[0.5em] uppercase animate-kop-flicker">KINGS OF PAINTBALL — LIVE</div>
+          <div className="font-arcade text-2xl sm:text-4xl text-white uppercase tracking-widest mt-1">MATCH {String(featured.number).padStart(2, "0")}</div>
+          <div className="font-display text-xs sm:text-sm text-cyan-300 uppercase tracking-widest">
+            {featured.phase === "GROUP" ? `Grupo ${featured.group}` : featured.phase}
+            {" · "}
+            <span className={
+              featured.status === "EM_ANDAMENTO" ? "text-green-400" :
+              featured.status === "PAUSADA" ? "text-yellow-400" :
+              featured.status === "ENCERRADA" ? "text-slate-500" : "text-cyan-300"
+            }>{featured.status}</span>
+          </div>
         </div>
 
-        {/* Big timer */}
-        <div
-          data-testid="live-timer"
-          className={`mt-4 font-mono-num font-black leading-none ${secs <= 10 && featured.status === "EM_ANDAMENTO" ? "text-red-500 animate-kop-pulse" : featured.status === "PAUSADA" ? "text-yellow-400" : "text-white"}`}
-          style={{ fontSize: "clamp(3rem, 12vw, 8rem)", letterSpacing: "0.05em", textShadow: featured.status === "EM_ANDAMENTO" ? "0 0 40px rgba(255,46,76,0.6)" : "0 0 20px rgba(255,255,255,0.3)" }}
-        >
-          {fmtTime(remainingMs)}
+        {/* HP HUD — Fighting Game style */}
+        <div className="w-full max-w-6xl mt-6 grid grid-cols-[1fr,auto,1fr] gap-3 sm:gap-6 items-start">
+          <div>
+            <HPBar
+              alive={aliveA} total={rosterA.length || 3}
+              mirror={true} color="red"
+              teamName={teamA?.name || "TEAM A"}
+              roster={rosterA} eliminatedIds={eliminatedIds}
+            />
+          </div>
+          <div
+            data-testid="live-timer"
+            className={`font-mono-num font-black leading-none ${secs <= 10 && featured.status === "EM_ANDAMENTO" ? "text-red-500 animate-kop-pulse" : featured.status === "PAUSADA" ? "text-yellow-400" : "text-white"}`}
+            style={{ fontSize: "clamp(2.5rem, 8vw, 5.5rem)", letterSpacing: "0.05em", textShadow: featured.status === "EM_ANDAMENTO" ? "0 0 40px rgba(255,46,76,0.6)" : "0 0 20px rgba(255,255,255,0.3)" }}
+          >
+            {fmtTime(remainingMs)}
+          </div>
+          <div>
+            <HPBar
+              alive={aliveB} total={rosterB.length || 3}
+              mirror={false} color="cyan"
+              teamName={teamB?.name || "TEAM B"}
+              roster={rosterB} eliminatedIds={eliminatedIds}
+            />
+          </div>
         </div>
 
-        <div className="grid grid-cols-[1fr,auto,1fr] gap-3 sm:gap-8 items-center w-full max-w-6xl mt-6">
+        {/* Player cards below HUD */}
+        <div className="w-full max-w-6xl mt-6 grid grid-cols-[1fr,auto,1fr] gap-3 sm:gap-8 items-center">
           <div className="text-center">
-            <div className="font-arcade text-2xl sm:text-4xl text-red-400 uppercase animate-kop-pulse mb-3 truncate">{teamA?.name}</div>
-            <div className="font-mono-num text-5xl sm:text-7xl font-black text-yellow-400 mb-3">{featured.elims_a}</div>
+            <div className="font-mono-num text-3xl sm:text-5xl font-black text-yellow-400 mb-2">{featured.elims_a}</div>
+            <div className="text-[10px] font-display tracking-widest uppercase text-slate-500 mb-2">Eliminações</div>
             <div className="flex justify-center gap-2 flex-wrap">{rosterA.map(p => <PlayerCard key={p.id} player={p} size="md" eliminated={eliminatedIds.has(p.id)} showLevel={false} />)}</div>
           </div>
-          <div className="font-arcade text-5xl sm:text-8xl text-white animate-kop-slam" style={{ textShadow: "0 0 40px rgba(255,46,76,1)" }}>VS</div>
+          <div className="font-arcade text-4xl sm:text-7xl text-white animate-kop-slam" style={{ textShadow: "0 0 40px rgba(255,46,76,1)" }}>VS</div>
           <div className="text-center">
-            <div className="font-arcade text-2xl sm:text-4xl text-cyan-300 uppercase animate-kop-pulse mb-3 truncate">{teamB?.name}</div>
-            <div className="font-mono-num text-5xl sm:text-7xl font-black text-yellow-400 mb-3">{featured.elims_b}</div>
+            <div className="font-mono-num text-3xl sm:text-5xl font-black text-yellow-400 mb-2">{featured.elims_b}</div>
+            <div className="text-[10px] font-display tracking-widest uppercase text-slate-500 mb-2">Eliminações</div>
             <div className="flex justify-center gap-2 flex-wrap">{rosterB.map(p => <PlayerCard key={p.id} player={p} size="md" eliminated={eliminatedIds.has(p.id)} showLevel={false} />)}</div>
           </div>
         </div>
