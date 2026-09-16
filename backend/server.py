@@ -210,6 +210,11 @@ class SetWinnerIn(BaseModel):
     winner_team_id: Optional[str] = None  # null to force draw
 
 
+class LiveStateIn(BaseModel):
+    mode: Optional[Literal["MATCH", "STANDINGS"]] = None
+    match_id: Optional[str] = None  # explicit null unpins; omit to keep current
+
+
 DEFAULT_TEAMS = [
     "TEAM JAPAN", "TEAM YAGAMI", "TEAM IKARI", "TEAM OROCHI", "TEAM NESTS",
     "TEAM FATAL FURY", "TEAM ART OF FIGHTING", "TEAM PSYCHO SOLDIER",
@@ -584,8 +589,45 @@ async def reset_tournament(_=Depends(require_admin)):
     await db.players.update_many({}, {"$set": {"team_id": None}})
     await db.tournament.update_one({"id": "main"}, {"$set": {
         "draw_done": False, "status": "OPEN", "mvp_player_id": None,
+        "live_mode": "MATCH", "live_match_id": None,
     }})
     return {"ok": True}
+
+
+# ---------- LIVE state (Telão control) ----------
+@api.get("/live/state")
+async def live_state():
+    """Public read: which view the Telão should show and which match is pinned."""
+    t = await db.tournament.find_one({"id": "main"}) or {}
+    return {
+        "mode": t.get("live_mode") or "MATCH",
+        "match_id": t.get("live_match_id"),
+    }
+
+
+@api.post("/live/state")
+async def set_live_state(body: LiveStateIn, _=Depends(require_admin)):
+    update = {}
+    if body.mode is not None:
+        update["live_mode"] = body.mode
+    # match_id: only include when caller sent the key at all
+    payload_keys = body.model_dump(exclude_unset=True).keys()
+    if "match_id" in payload_keys:
+        update["live_match_id"] = body.match_id
+    if update:
+        await db.tournament.update_one({"id": "main"}, {"$set": update})
+    return await live_state()
+
+
+@api.post("/live/load-next")
+async def load_next_match(_=Depends(require_admin)):
+    """Pins the next AGUARDANDO match onto the Telão and switches to MATCH mode."""
+    docs = await db.matches.find({"status": "AGUARDANDO"}).sort("number", 1).to_list(1)
+    match_id = docs[0]["id"] if docs else None
+    await db.tournament.update_one({"id": "main"}, {"$set": {
+        "live_mode": "MATCH", "live_match_id": match_id,
+    }})
+    return {"match_id": match_id, "mode": "MATCH"}
 
 
 # ---------- Matches ----------
@@ -638,11 +680,14 @@ async def start_match(mid: str, _=Depends(require_admin)):
     if m["status"] == "ENCERRADA":
         raise HTTPException(400, "Partida já encerrada")
     if m.get("started_at"):
-        # already started; return current state
         return await get_match(mid)
     await db.matches.update_one({"id": mid}, {"$set": {
         "started_at": now_iso(), "status": "EM_ANDAMENTO",
         "paused_at": None, "pause_accumulated_ms": 0, "ended_at": None,
+    }})
+    # Auto-pin the Telão to this match & switch to MATCH mode
+    await db.tournament.update_one({"id": "main"}, {"$set": {
+        "live_mode": "MATCH", "live_match_id": mid,
     }})
     return await get_match(mid)
 
