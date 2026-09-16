@@ -1,0 +1,26 @@
+{
+  "summary": "Backend testing for iteration 5 (KOP LIVE controller): all 19 tests in /app/backend/tests/test_live_state.py pass. Verified GET /api/live/state (public, defaults to mode=MATCH, match_id=null after reset), POST /api/live/state auth (401 without token, 200 with admin), setting both mode+match_id, exclude_unset semantics (omit match_id preserves current value), explicit null match_id unpins, POST /api/live/load-next returns first AGUARDANDO by number (or null when none), POST /api/matches/{id}/start auto-pins live_mode=MATCH + live_match_id=<mid>. Regression on read endpoints (/players anon projection, /players admin full, /matches, /standings, /stats/players, /stats/teams, /playoffs, /champion) all return expected schemas without _id leakage.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_live_state.py",
+    "/app/test_reports/pytest/pytest_live.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LiveStateIn.model_dump(exclude_unset=True) correctly distinguishes absent vs explicit-null match_id — verified end-to-end. Good use of pydantic v2 semantics.",
+    "live/load-next sorts by 'number' ascending and picks first AGUARDANDO — deterministic and correct. Returns null when no AGUARDANDO match remains; consider still switching mode to MATCH even when null (currently it does, which is the documented behavior).",
+    "start_match auto-pins Telão inside the same handler — nice UX. However there is no equivalent hook on /matches/{id}/end to clear/advance the pin, so the Telão will remain frozen on a finished match until admin manually clicks Carregar Próxima Partida (matches the spec requirement A — 'stays frozen', so this is intentional and correct).",
+    "reset_tournament resets live_mode='MATCH' and live_match_id=null but does NOT delete players — expected behavior; tests handle this by cleaning players in the session fixture.",
+    "GET /api/live/state is public (no auth) — appropriate for the Telão renderer.",
+    "No websocket/SSE for live state — Telão must poll. Not a bug but worth noting for performance if many viewers are on the Live page."
+  ],
+  "updated_files": ["/app/backend/tests/test_live_state.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "N/A"},
+  "test_credentials": "Admin: nevernub@gmail.com / KopAdmin2026! (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Test file self-seeds: session fixture resets tournament + deletes all players; then registers 30 TEST_ prefixed players (unique X-Forwarded-For per registration to avoid the 5/hour rate limit); runs /api/draw (10 teams × 3 players, BALANCED) to produce group matches.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run tests serially: `pytest backend/tests/test_live_state.py -o addopts=\"\"` — pytest.ini enables xdist parallelization by default and the session-scoped seed fixtures get duplicated across workers causing rate-limit collisions. The suite uses UUID-based /24 IPs in the 10.5.x.y range so it does not collide with test_security_fixes.py (10.0.x.y) or test_tournament_v3.py. Correct player levels are 'INICIANTE' | 'INTERMEDIÁRIO' | 'PROFISSIONAL' (note accented Á). Draw endpoint is POST /api/draw with body {num_teams, players_per_team, mode} — NOT /api/tournament/draw.",
+  "rca of the issue": "N/A — all live-state features work as specified. Initial test run had two setup-only issues (a) used wrong level literal 'INTERMEDIARIO' (missing accent) → 422, (b) called wrong draw endpoint /api/tournament/draw → 404. Both were test-side mistakes; fixed and full green run achieved."
+}
