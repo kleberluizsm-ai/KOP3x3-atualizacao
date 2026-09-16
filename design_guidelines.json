@@ -1,0 +1,146 @@
+{
+  "project_name": "KINGS OF PAINTBALL — KOP 3x3",
+  "app_type": "hybrid_fullstack",
+  "archetype": "THE PERFORMANCE PRO / ARCADE FIGHTING GAME (KOF Aesthetics)",
+  "tagline": "3 PLAYERS. 1 TEAM. 1 CHAMPION.",
+  "language": "Português (BR) com termos arcade em inglês (FIGHT!, WINNER, TEAM SELECT, VS, PERFECT, ELIMINATED)",
+  "design_philosophy": {
+    "emotion": "Adrenaline, competitive arcade nostalgia, tactical intensity, prestige champion glory",
+    "fusion": "90s/2000s KOF Fighting Game UI + Modern Esports Tournament Engine + Tactical Paintball Energy",
+    "core_rule": "NEVER use AI/drawn character avatars. Always display real player photos inside high-tech arcade combat cards with metallic frames, vibrant glows, and level badges."
+  },
+  "typography": {
+    "heading_font": "Bebas Neue, Anton, Audiowide, sans-serif",
+    "subheading_font": "Oswald, Rajdhani, sans-serif",
+    "body_font": "Rajdhani, Manrope, sans-serif",
+    "mono_numeric_font": "Chivo, JetBrains Mono, monospace",
+    "google_fonts_url": "https://fonts.googleapis.com/css2?family=Anton&family=Audiowide&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Chivo:wght@700;900&display=swap",
+    "hierarchy": {
+      "h1_hero": "text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-wider leading-none",
+      "h2_section": "text-2xl sm:text-3xl lg:text-4xl font-bold uppercase tracking-wide",
+      "h3_card_title": "text-xl sm:text-2xl font-bold uppercase tracking-normal",
+      "arcade_badges": "text-xs sm:text-sm font-extrabold uppercase tracking-widest px-2 py-0.5"
+    }
+  },
+  "colors": {
+    "background_base": "#0B0D12",
+    "background_card": "#131722",
+    "background_surface_elevated": "#1C2232",
+    "text_primary": "#F1F5F9",
+    "text_secondary": "#94A3B8",
+    "text_accent_yellow": "#FFD000",
+    "primary_red": "#FF2E4C",
+    "secondary_orange": "#FF6B00",
+    "electric_blue": "#00E5FF",
+    "metallic_gold": "#EAB308",
+    "metallic_silver": "#94A3B8",
+    "border_metallic": "rgba(255, 255, 255, 0.15)",
+    "border_active_glow": "#FF2E4C",
+    "gradients": {
+      "arcade_red": "linear-gradient(135deg, #FF2E4C 0%, #99001A 100%)",
+      "arcade_orange_gold": "linear-gradient(135deg, #FF6B00 0%, #D97706 100%)",
+      "vs_clash": "linear-gradient(90deg, #FF2E4C 0%, #131722 50%, #00E5FF 100%)",
+      "gold_champion": "linear-gradient(135deg, #F59E0B 0%, #B45309 100%)",
+      "card_frame": "linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(0,0,0,0.8) 100%)"
+    }
+  },
+  "visual_enhancers": {
+    "scanlines": "repeating-linear-gradient(0deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px)",
+    "arcade_border": "1px solid rgba(255, 46, 76, 0.4)",
+    "neon_glow_red": "0 0 20px rgba(255, 46, 76, 0.6)",
+    "neon_glow_blue": "0 0 20px rgba(0, 229, 255, 0.6)",
+    "neon_glow_gold": "0 0 25px rgba(234, 179, 8, 0.7)",
+    "clip_path_angled": "polygon(0 0, 100% 0, 95% 100%, 0% 100%)",
+    "card_chamfer": "polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)"
+  },
+  "component_design": {
+    "player_card": {
+      "aspect_ratio": "aspect-[3/4]",
+      "styling": "Relative overflow-hidden rounded-md border-2 border-slate-700 bg-slate-900 shadow-2xl transition-all duration-300 hover:scale-105 hover:border-red-500 hover:shadow-[0_0_25px_rgba(255,46,76,0.5)]",
+      "eliminated_state": "filter grayscale contrast-125 opacity-60 relative after:content-['ELIMINATED'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:bg-black/80 after:text-red-600 after:font-black after:text-2xl after:-rotate-12 after:border-y-4 after:border-red-600"
+    },
+    "team_names_kof": [
+      "TEAM JAPAN",
+      "TEAM YAGAMI",
+      "TEAM IKARI",
+      "TEAM OROCHI",
+      "TEAM NESTS",
+      "TEAM FATAL FURY",
+      "TEAM ART OF FIGHTING",
+      "TEAM PSYCHO SOLDIER",
+      "TEAM WOMEN FIGHTERS",
+      "TEAM KOF HEROES"
+    ],
+    "skill_levels": [
+      {"name": "INICIANTE", "color": "bg-blue-600/30 text-blue-400 border-blue-500"},
+      {"name": "INTERMEDIÁRIO", "color": "bg-amber-600/30 text-amber-400 border-amber-500"},
+      {"name": "PROFISSIONAL", "color": "bg-red-600/30 text-red-400 border-red-500"}
+    ],
+    "badges": {
+      "perfect": "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-black font-black tracking-widest px-3 py-1 rounded shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse",
+      "mvp": "bg-cyan-500 text-black font-extrabold px-2.5 py-0.5 rounded shadow-[0_0_10px_rgba(0,229,255,0.6)]"
+    }
+  },
+  "navigation": {
+    "home_menu_items": [
+      {"key": "INSCRIÇÕES", "label": "INSCRIÇÃO", "icon": "UserPlus"},
+      {"key": "TEAMS", "label": "EQUIPES", "icon": "Shield"},
+      {"key": "TEAM_SELECT", "label": "SORTEIO TEAMS", "icon": "Shuffle"},
+      {"key": "GROUPS", "label": "GRUPOS A/B", "icon": "Grid"},
+      {"key": "MATCHES", "label": "PARTIDAS", "icon": "Swords"},
+      {"key": "STANDINGS", "label": "CLASSIFICAÇÃO", "icon": "Trophy"},
+      {"key": "PLAYERS", "label": "JOGADORES", "icon": "Users"},
+      {"key": "STATS", "label": "ESTATÍSTICAS", "icon": "BarChart3"},
+      {"key": "PLAYOFFS", "label": "MATA-MATA", "icon": "GitFork"},
+      {"key": "CHAMPION", "label": "PÓDIO KOP", "icon": "Crown"},
+      {"key": "LIVE", "label": "TELÃO KOP LIVE", "icon": "Tv"}
+    ]
+  },
+  "image_urls": [
+    {
+      "url": "https://images.unsplash.com/photo-1610480652150-f14864e0770c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxwYWludGJhbGwlMjBwbGF5ZXIlMjBwb3J0cmFpdCUyMHRvdXJuYW1lbnR8ZW58MHx8fHwxNzg5NTU1MTA1fDA&ixlib=rb-4.1.0&q=85",
+      "category": "player_default_1",
+      "description": "Paintball player with red jacket and tactical helmet"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1588432892804-a10512c79146?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwzfHxwYWludGJhbGwlMjBwbGF5ZXIlMjBwb3J0cmFpdCUyMHRvdXJuYW1lbnR8ZW58MHx8fHwxNzg5NTU1MTA1fDA&ixlib=rb-4.1.0&q=85",
+      "category": "player_default_2",
+      "description": "Tactical paintball player aiming marker"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1588432892836-99b9aa3feb8a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHw0fHxwYWludGJhbGwlMjBwbGF5ZXIlMjBwb3J0cmFpdCUyMHRvdXJuYW1lbnR8ZW58MHx8fHwxNzg5NTU1MTA1fDA&ixlib=rb-4.1.0&q=85",
+      "category": "player_default_3",
+      "description": "Paintball player in camouflage gear"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1557543237-519b4f6d3373?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwyfHxwYWludGJhbGwlMjBwbGF5ZXIlMjBwb3J0cmFpdCUyMHRvdXJuYW1lbnR8ZW58MHx8fHwxNzg5NTU1MTA1fDA&ixlib=rb-4.1.0&q=85",
+      "category": "player_default_4",
+      "description": "Paintball athlete holding marker with protection mask"
+    },
+    {
+      "url": "https://images.pexels.com/photos/15449248/pexels-photo-15449248.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "category": "team_banner",
+      "description": "Paintball duo tournament players in gear"
+    },
+    {
+      "url": "https://images.pexels.com/photos/16436587/pexels-photo-16436587.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "category": "hero_background",
+      "description": "High intensity paintball action background"
+    }
+  ],
+  "instructions_to_main_agent": [
+    "Ensure all interactive buttons have data-testid attributes for E2E validation.",
+    "Implement sound effects or visual sound effect toggle for standard KOF menu sounds (SELECT, VS, WINNER, FIGHT).",
+    "Player cards MUST highlight real names and photos, strictly styled like classic Arcade Fighting character select frames with bevels, level tags, and dynamic glow.",
+    "The VS screen must be full screen capable or high impact modal with split 3v3 layout, red team vs blue team glowing markers, and animated VS explosion emblem.",
+    "Support KOP LIVE fullscreen screen mode meant for TV displays/projectors with automatic live updating match scores.",
+    "Include admin authentication to draft teams, submit match scores, declare PERFECT wins, and reset tournament state."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "anti_ai_slop": "Avoid generic SaaS centered card templates. Use chamfered retro-arcade containers, dark obsidian textures, neon border glows, and crisp typography.",
+    "testing_requirement": "All buttons, inputs, navigation tabs, player card clicks, and score inputs MUST include kebab-case role-based data-testid attributes."
+  }
+},
+  "overwrite": true,
+  "path": "/app/design_guidelines.json"
+}

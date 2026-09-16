@@ -1,0 +1,245 @@
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Audiowide&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Chivo:wght@700;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --kop-bg: #0b0d12;
+    --kop-card: #131722;
+    --kop-elevated: #1c2232;
+    --kop-red: #ff2e4c;
+    --kop-orange: #ff6b00;
+    --kop-yellow: #ffd000;
+    --kop-blue: #00e5ff;
+    --kop-gold: #eab308;
+}
+
+@layer base {
+    :root {
+        --background: 222 25% 6%;
+        --foreground: 210 40% 96%;
+        --card: 222 25% 10%;
+        --card-foreground: 210 40% 96%;
+        --popover: 222 25% 10%;
+        --popover-foreground: 210 40% 96%;
+        --primary: 350 100% 59%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 222 20% 15%;
+        --secondary-foreground: 210 40% 96%;
+        --muted: 222 20% 15%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 190 100% 50%;
+        --accent-foreground: 0 0% 5%;
+        --destructive: 350 100% 59%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 222 20% 20%;
+        --input: 222 20% 15%;
+        --ring: 350 100% 59%;
+        --radius: 0.5rem;
+    }
+}
+
+* {
+    border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+    background: var(--kop-bg);
+    color: #f1f5f9;
+    font-family: "Rajdhani", "Manrope", sans-serif;
+    min-height: 100vh;
+}
+
+body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+        radial-gradient(
+            circle at 15% 10%,
+            rgba(255, 46, 76, 0.08) 0%,
+            transparent 40%
+        ),
+        radial-gradient(
+            circle at 85% 90%,
+            rgba(0, 229, 255, 0.06) 0%,
+            transparent 40%
+        );
+}
+
+.font-arcade {
+    font-family: "Audiowide", "Bebas Neue", sans-serif;
+    letter-spacing: 0.05em;
+}
+.font-display {
+    font-family: "Bebas Neue", "Anton", sans-serif;
+    letter-spacing: 0.04em;
+}
+.font-heading {
+    font-family: "Anton", "Bebas Neue", sans-serif;
+    letter-spacing: 0.02em;
+}
+.font-mono-num {
+    font-family: "Chivo", monospace;
+}
+
+.scanlines::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.18),
+        rgba(0, 0, 0, 0.18) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+    pointer-events: none;
+    z-index: 2;
+}
+
+.kop-chamfer {
+    clip-path: polygon(
+        14px 0,
+        100% 0,
+        100% calc(100% - 14px),
+        calc(100% - 14px) 100%,
+        0 100%,
+        0 14px
+    );
+}
+
+.kop-glow-red {
+    box-shadow:
+        0 0 24px rgba(255, 46, 76, 0.55),
+        inset 0 0 12px rgba(255, 46, 76, 0.15);
+}
+.kop-glow-blue {
+    box-shadow:
+        0 0 24px rgba(0, 229, 255, 0.55),
+        inset 0 0 12px rgba(0, 229, 255, 0.15);
+}
+.kop-glow-gold {
+    box-shadow:
+        0 0 26px rgba(234, 179, 8, 0.65),
+        inset 0 0 12px rgba(234, 179, 8, 0.2);
+}
+
+.text-stroke-red {
+    -webkit-text-stroke: 1px rgba(255, 46, 76, 0.65);
+}
+
+@keyframes kop-pulse-glow {
+    0%,
+    100% {
+        text-shadow:
+            0 0 8px rgba(255, 46, 76, 0.9),
+            0 0 20px rgba(255, 46, 76, 0.4);
+    }
+    50% {
+        text-shadow:
+            0 0 16px rgba(255, 46, 76, 1),
+            0 0 30px rgba(255, 46, 76, 0.7);
+    }
+}
+.animate-kop-pulse {
+    animation: kop-pulse-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes kop-slam {
+    0% {
+        transform: scale(3) rotate(-8deg);
+        opacity: 0;
+    }
+    60% {
+        transform: scale(0.9) rotate(2deg);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+    }
+}
+.animate-kop-slam {
+    animation: kop-slam 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes kop-shake {
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+    25% {
+        transform: translate(-3px, 2px);
+    }
+    50% {
+        transform: translate(3px, -2px);
+    }
+    75% {
+        transform: translate(-2px, -3px);
+    }
+}
+.animate-kop-shake {
+    animation: kop-shake 0.4s ease-in-out infinite;
+}
+
+@keyframes kop-scroll-x {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+.animate-kop-scroll {
+    animation: kop-scroll-x 22s linear infinite;
+}
+
+@keyframes kop-flicker {
+    0%,
+    92%,
+    100% {
+        opacity: 1;
+    }
+    93%,
+    97% {
+        opacity: 0.6;
+    }
+    95% {
+        opacity: 0.2;
+    }
+}
+.animate-kop-flicker {
+    animation: kop-flicker 4s infinite;
+}
+
+.kop-grid-bg {
+    background-image:
+        linear-gradient(rgba(255, 46, 76, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 46, 76, 0.08) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+.kop-diag-bg {
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.02) 0,
+        rgba(255, 255, 255, 0.02) 2px,
+        transparent 2px,
+        transparent 12px
+    );
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #0b0d12;
+}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(#ff2e4c, #99001a);
+    border-radius: 4px;
+}
