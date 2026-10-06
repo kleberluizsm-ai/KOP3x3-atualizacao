@@ -4,7 +4,8 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "sonner";
 import { sfx } from "../sound";
-import { Shuffle, Trash2, RefreshCw, Lock, Unlock, Tv, Trophy, Swords, SkipForward } from "lucide-react";
+import { Shuffle, Trash2, RefreshCw, Lock, Unlock, Tv, Trophy, Swords, SkipForward, Pencil } from "lucide-react";
+import { PlayerEditModal } from "../components/PlayerEditModal";
 
 export default function Admin() {
   const { isAdmin, loading } = useAuth();
@@ -15,6 +16,8 @@ export default function Admin() {
   const [matches, setMatches] = useState([]);
   const [live, setLive] = useState({ mode: "MATCH", match_id: null });
   const [mode, setMode] = useState("BALANCED");
+  const [editing, setEditing] = useState(null);
+  const [playerSearch, setPlayerSearch] = useState("");
 
   useEffect(() => {
     if (!loading && !isAdmin) nav("/login");
@@ -176,25 +179,89 @@ export default function Admin() {
       </section>
 
       <section className="bg-black/60 border border-red-900/50 kop-chamfer p-5">
-        <h2 className="font-display text-xl text-white uppercase tracking-widest mb-3">Jogadores ({players.length})</h2>
-        <div className="max-h-96 overflow-auto">
+        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <h2 className="font-display text-xl text-white uppercase tracking-widest">Jogadores Inscritos ({players.length})</h2>
+          <input
+            data-testid="player-search"
+            value={playerSearch}
+            onChange={e => setPlayerSearch(e.target.value)}
+            placeholder="Buscar nome, apelido…"
+            className="bg-slate-900 border border-slate-700 focus:border-red-500 px-3 py-1 text-white text-sm outline-none max-w-xs"
+          />
+        </div>
+        <div className="max-h-[32rem] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="text-xs text-slate-500 uppercase">
-              <tr><th className="text-left p-1">Nome</th><th className="text-left">Nível</th><th className="text-left">Equipe</th><th></th></tr>
+            <thead className="text-xs text-slate-500 uppercase sticky top-0 bg-slate-950 z-10">
+              <tr>
+                <th className="text-left p-2">Foto</th>
+                <th className="text-left p-2">Nome · Apelido</th>
+                <th className="text-left p-2">Nível</th>
+                <th className="text-left p-2">Equipe</th>
+                <th className="text-left p-2">Status</th>
+                <th className="text-right p-2">Ações</th>
+              </tr>
             </thead>
             <tbody>
-              {players.map(p => (
-                <tr key={p.id} className="border-t border-slate-800">
-                  <td className="p-1 text-white">{p.name} {p.nickname && <span className="text-cyan-300 text-xs">"{p.nickname}"</span>}</td>
-                  <td className="text-slate-300 text-xs">{p.level}</td>
-                  <td className="text-slate-400 text-xs">{teams.find(t => t.id === p.team_id)?.name || "—"}</td>
-                  <td className="text-right"><button data-testid={`delete-player-${p.id}`} onClick={() => removePlayer(p.id)} className="text-red-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button></td>
+              {players
+                .filter(p => {
+                  if (!playerSearch.trim()) return true;
+                  const q = playerSearch.trim().toLowerCase();
+                  return (p.name || "").toLowerCase().includes(q) || (p.nickname || "").toLowerCase().includes(q);
+                })
+                .map(p => (
+                <tr key={p.id} className="border-t border-slate-800 hover:bg-slate-900/50">
+                  <td className="p-2">
+                    {p.photo ? (
+                      <img src={p.photo} alt={p.name} className="w-10 h-10 object-cover rounded border border-red-500/40" />
+                    ) : (
+                      <div className="w-10 h-10 bg-slate-800 rounded flex items-center justify-center text-slate-600 text-xs">?</div>
+                    )}
+                  </td>
+                  <td className="p-2">
+                    <div className="text-white font-display uppercase tracking-wide">{p.name}</div>
+                    {p.nickname && <div className="text-cyan-300 text-xs">"{p.nickname}"</div>}
+                    {p.whatsapp && <div className="text-slate-500 text-[10px] font-mono-num">📱 {p.whatsapp}</div>}
+                  </td>
+                  <td className="p-2 text-slate-300 text-xs">{p.level}</td>
+                  <td className="p-2 text-slate-400 text-xs">{teams.find(t => t.id === p.team_id)?.name || "—"}</td>
+                  <td className="p-2">
+                    <span className={`text-[10px] font-display uppercase tracking-widest px-1.5 py-0.5 border ${
+                      p.status === "CONFIRMADO" ? "border-green-500/50 text-green-400"
+                      : p.status === "PENDENTE" ? "border-yellow-500/50 text-yellow-400"
+                      : "border-red-500/50 text-red-400"
+                    }`}>{p.status}</span>
+                  </td>
+                  <td className="p-2 text-right">
+                    <button data-testid={`edit-player-${p.id}`} onClick={() => { setEditing(p); sfx.select(); }}
+                      className="text-cyan-300 hover:text-cyan-200 mr-2" title="Editar">
+                      <Pencil className="w-4 h-4 inline" />
+                    </button>
+                    <button data-testid={`delete-player-${p.id}`} onClick={() => removePlayer(p.id)}
+                      className="text-red-500 hover:text-red-400" title="Excluir">
+                      <Trash2 className="w-4 h-4 inline" />
+                    </button>
+                  </td>
                 </tr>
               ))}
+              {players.length === 0 && (
+                <tr><td colSpan={6} className="p-8 text-center text-slate-500 font-display uppercase tracking-widest">Nenhum inscrito ainda</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {editing && (
+        <PlayerEditModal
+          player={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setPlayers(ps => ps.map(x => x.id === updated.id ? { ...x, ...updated } : x));
+            setEditing(null);
+            load();
+          }}
+        />
+      )}
 
       <section className="bg-black/60 border border-red-900/50 kop-chamfer p-5">
         <h2 className="font-display text-xl text-white uppercase tracking-widest mb-3">Partidas ({matches.length})</h2>
