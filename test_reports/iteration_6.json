@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 6 backend testing — PATCH /api/players/{id} semantics + preservation + full regression. All 25 tests in /app/backend/tests/test_player_patch.py pass. Verified: (1) PATCH requires admin bearer token (401 anon), (2) full update returns full doc including whatsapp/notes with no _id leak, (3) pydantic Field constraints trigger 422 for name='' / name>80 / nickname>40 / notes>300 / whatsapp>30 / status>30 / photo>700000, (4) photo update works with valid data URL, (5) EXCLUDE_UNSET PRESERVATION — PATCH {name:'NewName'} on a player with {nickname, whatsapp, notes} set preserves all other fields (verified via PATCH response AND subsequent GET), (6) PATCH 404 on non-existent id, (7) arbitrary status string <=30 chars accepted, (8) DELETE requires admin and removes player from team.players array after draw, (9) GET /players anon returns public projection without whatsapp/notes, admin returns full records, (10) regression on /live/state, /matches, /standings, /stats/players, /stats/teams, /playoffs, /champion all 200, (11) /matches/{id}/start|pause|resume|end|eliminate still work after a draw.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_player_patch.py",
+    "/app/test_reports/pytest/pytest_patch.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py line 433: update_player uses `{k: v for k, v in body.model_dump().items() if v is not None}` instead of `body.model_dump(exclude_unset=True)`. In practice both achieve the preservation goal because PlayerUpdateIn fields all default to None, so omitted fields are filtered out. HOWEVER this means admins CANNOT explicitly null a field (e.g., clear nickname/whatsapp/notes via PATCH {nickname: null}) — such requests are silently ignored. If 'clear a field' is a desired admin action, switch to exclude_unset=True. The current task description already mentions 'pydantic exclude_unset for the model_dump' as the intent — recommend aligning the implementation accordingly. Not a blocker because the stated preservation behavior is met.",
+    "PlayerUpdateIn.status is a free-form `str` with max_length=30. Combined with /draw filtering by status=='CONFIRMADO' this means an admin typo (e.g., 'CONFIRMADOX') silently removes a player from draw eligibility with no feedback. Consider making status a Literal[...] enum.",
+    "DELETE /api/players/{pid} at line 442 does not return 404 when the player doesn't exist — it silently returns {ok:true}. Minor idempotency vs. REST-correctness tradeoff; current behavior is acceptable but worth noting.",
+    "Overall PATCH + public-projection separation is solid: GET /players anon strictly projects away whatsapp/notes while admin receives full records (verified end-to-end).",
+    "Rate limiter uses in-memory dict keyed by IP (seen in earlier iterations) — not horizontally scalable; fine for single-pod MVP."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_player_patch.py"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "N/A"},
+  "test_credentials": "Admin: nevernub@gmail.com / KopAdmin2026! (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Module-scoped autouse fixture resets tournament, deletes all players, bumps player_limit to 60. Tests self-seed players as needed using unique X-Forwarded-For in 10.6.x.y range to avoid rate-limit collisions with other suites (which use 10.0.* and 10.5.*). Register loop checks CONFIRMADO count (not raw count) before stopping because PATCH tests change some players' status, and /draw filters by status=='CONFIRMADO'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run this suite serially: `pytest backend/tests/test_player_patch.py -o addopts=''` (pytest.ini default xdist loadscope works too but overriding addopts guarantees serial). Match documents use key `team_a`/`team_b` (not team_a_id/team_b_id). /draw endpoint filters players by status=='CONFIRMADO', so if you need N draw-eligible players, count by status rather than total. player_limit must be bumped above 30 if PATCH tests mutate status fields leaving some players non-CONFIRMADO. PlayerUpdateIn constraints: name 1-80, nickname <=40, whatsapp <=30, notes <=300, status <=30 (free-form string), photo <=700000.",
+  "rca of the issue": "N/A — no production bugs found. Two initial test failures were test-side setup issues: (a) /draw returned 'temos 28' because PATCH tests mutated status for 2 players; fixed by counting only CONFIRMADO players when seeding to 30. (b) KeyError 'team_a_id' because match schema uses 'team_a'/'team_b'; fixed in test."
+}

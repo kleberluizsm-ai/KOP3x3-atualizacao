@@ -190,7 +190,7 @@ export default function Admin() {
           />
         </div>
         <div className="max-h-[32rem] overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="text-xs text-slate-500 uppercase sticky top-0 bg-slate-950 z-10">
               <tr>
                 <th className="text-left p-2">Foto</th>
